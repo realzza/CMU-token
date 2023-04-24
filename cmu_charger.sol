@@ -9,6 +9,8 @@ contract StudentChargerSharing is ERC20 {
         string campusEmail;
         uint256 rating;
         uint256 totalRatings;
+        
+        uint256 deposit;
     }
 
     struct Charger {
@@ -17,6 +19,10 @@ contract StudentChargerSharing is ERC20 {
         address owner;
         bool available;
         bool functional;
+       
+        uint256 rentalFee;
+        uint256 damageFine;
+        uint256 tokenPrice;
     }
 
     struct Booking {
@@ -32,6 +38,10 @@ contract StudentChargerSharing is ERC20 {
     mapping(uint256 => Booking) public bookings;
     uint256 private chargerCounter;
     uint256 private bookingCounter;
+    
+    mapping(address => uint256) public balances;
+    mapping(address => bool) public rented;
+    mapping(address => uint) public tokens;
 
     // Events
     event ChargerAdded(uint256 indexed chargerId, string description, uint256 price, address indexed owner);
@@ -44,7 +54,8 @@ contract StudentChargerSharing is ERC20 {
     event ChargerReportedDamaged(uint256 indexed chargerId, address indexed reporter);
     event TokensToppedUp(address indexed user, uint256 amount);
     event TokensCashedOut(address indexed user, uint256 amount);
-
+    
+   
     // Constructor
     constructor() ERC20("StudentChargerToken", "SCT") {
         _mint(msg.sender, 1000000 * (10 ** uint256(decimals())));
@@ -101,6 +112,48 @@ contract StudentChargerSharing is ERC20 {
     // Chloris's functions
     function topUpTokens(uint256 amount) external { /* ... */ }
     function cashOutTokens(uint256 amount) external { /* ... */ }
+    
+    constructor() {
+        owner = msg.sender;
+        deposit = 1 ether;
+        rentalFee = 0.25 ether;
+        damageFine = 0.5 ether;
+        tokenPrice = 0.01 ether; 
+    }
 
+   function topUpTokens(uint256 amount) external {
+        require(msg.value == amount * tokenPrice, "Incorrect token price, cannot be topped up");
+        tokens[msg.sender] += amount;
+        emit TokensToppedUp(msg.sender, amount);
+    }
+    
+    function cashOutTokens(uint256 amount) external {
+        require(tokens[msg.sender] >= amount, "Insufficient tokens");
+        tokens[msg.sender] -= amount;
+        payable(msg.sender).transfer(amount * tokenPrice);
+        emit TokensCashedOut(msg.sender, amount);
+    }
+}
+
+    function rent() external payable {
+        require(msg.value >= deposit + rentalFee, "Insufficient funds");
+        require(!rented[msg.sender], "Already rented,cannot rent again");
+        balances[msg.sender] = msg.value;
+        rented[msg.sender] = true;
+    }
+
+    function returnCharger(bool damaged) external {
+        require(rented[msg.sender], "Not rented");
+        uint balance = balances[msg.sender];
+        balances[msg.sender] = 0;
+        rented[msg.sender] = false;
+        uint refund = balance - rentalFee;
+        if (damaged) {
+            require(refund >= damageFine, "Insufficient balance for damage fee");
+            refund -= damageFine;
+            owner.transfer(damageFine);
+        }
+        tokens[msg.sender] += refund / tokenPrice;
+    }
 }
 
