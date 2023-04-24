@@ -146,7 +146,6 @@ contract StudentChargerSharing is ERC20 {
         payable(msg.sender).transfer(amount * tokenPrice);
         emit TokensCashedOut(msg.sender, amount);
     }
-}
 
     function rent() external payable {
         require(msg.value >= deposit + rentalFee, "Insufficient funds");
