@@ -144,10 +144,10 @@ contract StudentChargerSharing is ERC20 {
 
     function returnCharger(bool damaged) external {
         require(rented[msg.sender], "Not rented");
-        uint balance = balances[msg.sender];
+        uint256 balance = balances[msg.sender];
         balances[msg.sender] = 0;
         rented[msg.sender] = false;
-        uint refund = balance - rentalFee;
+        uint256 refund = balance - rentalFee;
         if (damaged) {
             require(refund >= damageFine, "Insufficient balance for damage fee");
             refund -= damageFine;
