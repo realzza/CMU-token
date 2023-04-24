@@ -133,16 +133,16 @@ contract StudentChargerSharing is ERC20 {
         price = chargers[chargerId].price;
         token_price = chargers[chargerId].tokenPrice;
         
-        if balances[msg.sender] >= price:
+        if balances[msg.sender] >= price {
             chargers[chargerId].functional = false;
             balances[msg.sender] -= price;
             owner = chargers[chargerId].owner;
             transferPayment(owner, price / token_price);
-        else:
+        } else {
             deposit[msg.sender] -= price;
             owner = chargers[chargerId].owner;
             transferPayment(owner, price / token_price);
-            
+        }    
         emit ChargerReportedLost(chargerId, msg.sender);
     }
         
@@ -151,16 +151,16 @@ contract StudentChargerSharing is ERC20 {
         damageFine = chargers[chargerId].damageFine;
         token_price = chargers[chargerId].tokenPrice;
         
-        if balances[msg.sender] >= damageFine:
+        if balances[msg.sender] >= damageFine {
             chargers[chargerId].functional = false;
             balances[msg.sender] -= damageFine;
             owner = chargers[chargerId].owner;
             transferPayment(owner, damageFine / token_price);
-        else:
+        } else {
             deposit[msg.sender] -= damageFine;
             owner = chargers[chargerId].owner;
             transferPayment(owner, damageFine / token_price);
-        
+        }
         emit ChargerReportedDamaged(chargerId, msg.sender);
     }
 
