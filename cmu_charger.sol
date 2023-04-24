@@ -99,9 +99,22 @@ contract StudentChargerSharing is ERC20 {
         emit BookingConfirmed(booking.chargerId, booking.renter, startDate, endDate);
     }
 
-    // Mia's function
-    function transferPayment(address to, uint256 amount) external { /* ... */ }
-    function registerStudent(string memory name, string memory campusEmail) external { /* ... */ }
+    // Mia's functions
+    function transferPayment(address to, uint256 amount) external {
+        require(tokens[msg.sender] >= amount, "Insufficient tokens for transfer");
+        tokens[msg.sender] -= amount;
+        tokens[to] += amount;
+        emit PaymentTransferred(msg.sender, to, amount);
+    }
+
+    //In the registerStudent function, we check if the student has already been registered 
+    //by verifying if the name field in their profile is empty. 
+    //If they have not been registered yet, we create a new 
+    //StudentProfile with the provided name, campus email, and an initial deposit value.
+    function registerStudent(string memory name, string memory campusEmail) external {
+        require(bytes(studentProfiles[msg.sender].name).length == 0, "Student already registered");
+        studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit);
+    }
 
     // Jenny's functions
     function returnCharger(uint256 chargerId) external { /* ... */ }
