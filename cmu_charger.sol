@@ -9,7 +9,6 @@ contract StudentChargerSharing is ERC20 {
         string campusEmail;
         uint256 rating;
         uint256 totalRatings;
-        
         uint256 deposit;
     }
 
@@ -19,7 +18,6 @@ contract StudentChargerSharing is ERC20 {
         address owner;
         bool available;
         bool functional;
-       
         uint256 rentalFee;
         uint256 damageFine;
         uint256 tokenPrice;
@@ -43,6 +41,12 @@ contract StudentChargerSharing is ERC20 {
     mapping(address => bool) public rented;
     mapping(address => uint) public tokens;
 
+    // Constants
+    uint256 public constant deposit = 1 ether;
+    uint256 public constant rentalFee = 0.25 ether;
+    uint256 public constant damageFine = 0.5 ether;
+    uint256 public constant tokenPrice = 0.01 ether; 
+
     // Events
     event ChargerAdded(uint256 indexed chargerId, string description, uint256 price, address indexed owner);
     event ChargerDelisted(uint256 indexed chargerId, address indexed owner);
@@ -55,25 +59,26 @@ contract StudentChargerSharing is ERC20 {
     event TokensToppedUp(address indexed user, uint256 amount);
     event TokensCashedOut(address indexed user, uint256 amount);
     
-   
     // Constructor
     constructor() ERC20("StudentChargerToken", "SCT") {
         _mint(msg.sender, 1000000 * (10 ** uint256(decimals())));
     }
 
-    // Ziang's functions
+    // Add charger
     function addCharger(string memory description, uint256 price) external {
         chargerCounter++;
-        chargers[chargerCounter] = Charger(description, price, msg.sender, true, true);
+        chargers[chargerCounter] = Charger(description, price, msg.sender, true, true, rentalFee, damageFine, tokenPrice);
         emit ChargerAdded(chargerCounter, description, price, msg.sender);
     }
 
+    // Delist charger
     function delistCharger(uint256 chargerId) external {
         require(chargers[chargerId].owner == msg.sender, "Only the owner can delist a charger.");
         chargers[chargerId].available = false;
         emit ChargerDelisted(chargerId, msg.sender);
     }
 
+    // Request booking
     function requestBooking(uint256 chargerId) external {
         require(chargers[chargerId].available, "Charger is not available for booking.");
         require(chargers[chargerId].functional, "Charger is not functional.");
@@ -82,6 +87,7 @@ contract StudentChargerSharing is ERC20 {
         emit BookingRequest(chargerId, msg.sender);
     }
 
+    // Confirm booking
     function confirmBooking(uint256 bookingId, uint256 startDate, uint256 endDate) external {
         Booking storage booking = bookings[bookingId];
         Charger storage charger = chargers[booking.chargerId];
@@ -99,7 +105,7 @@ contract StudentChargerSharing is ERC20 {
         emit BookingConfirmed(booking.chargerId, booking.renter, startDate, endDate);
     }
 
-    // Mia's functions
+    // Transfer payment
     function transferPayment(address to, uint256 amount) external {
         require(tokens[msg.sender] >= amount, "Insufficient tokens for transfer");
         tokens[msg.sender] -= amount;
@@ -107,81 +113,70 @@ contract StudentChargerSharing is ERC20 {
         emit PaymentTransferred(msg.sender, to, amount);
     }
 
-    //In the registerStudent function, we check if the student has already been registered 
-    //by verifying if the name field in their profile is empty. 
-    //If they have not been registered yet, we create a new 
-    //StudentProfile with the provided name, campus email, and an initial deposit value.
+    // Register student
     function registerStudent(string memory name, string memory campusEmail) external {
         require(bytes(studentProfiles[msg.sender].name).length == 0, "Student already registered");
         studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit);
     }
 
-    // Jenny's functions
+    // Rate student
     function rateStudent(address student, uint256 rating) external { 
-		require(bytes(studentProfiles[msg.sender].name).length != 0, "Student is not registered");
+        require(bytes(studentProfiles[msg.sender].name).length != 0, "Student is not registered");
 
-		num_rating = studentProfiles[student].totalRatings;
-		new_rate = (studentProfiles[student].rating * num_rating + rating) / (num_rating + 1);
-	
-		studentProfiles[student].rating = new_rate;
-		studentProfiles[student].totalRatings = num_rating + 1;
+        uint256 num_rating = studentProfiles[student].totalRatings;
+        uint256 new_rate = (studentProfiles[student].rating * num_rating + rating) / (num_rating + 1);
+    
+        studentProfiles[student].rating = new_rate;
+        studentProfiles[student].totalRatings = num_rating + 1;
         emit UserRated(msg.sender, student, rating);
-	}
-    
-    
+    }
+
+    // Report charger lost
     function reportChargerLost(uint256 chargerId) external { 
-        price = chargers[chargerId].price;
-        token_price = chargers[chargerId].tokenPrice;
+        uint256 price = chargers[chargerId].price;
+        uint256 token_price = chargers[chargerId].tokenPrice;
         
-        if balances[msg.sender] >= price {
+        if (balances[msg.sender] >= price) {
             chargers[chargerId].functional = false;
             balances[msg.sender] -= price;
-            owner = chargers[chargerId].owner;
+            address owner = chargers[chargerId].owner;
             transferPayment(owner, price / token_price);
         } else {
-            deposit[msg.sender] -= price;
-            owner = chargers[chargerId].owner;
+            studentProfiles[msg.sender].deposit -= price;
+            address owner = chargers[chargerId].owner;
             transferPayment(owner, price / token_price);
-        }    
+        }
+            
         emit ChargerReportedLost(chargerId, msg.sender);
     }
-        
-        
+
+    // Report charger damaged
     function reportChargerDamaged(uint256 chargerId) external { 
-        damageFine = chargers[chargerId].damageFine;
-        token_price = chargers[chargerId].tokenPrice;
+        uint256 damageFine = chargers[chargerId].damageFine;
+        uint256 token_price = chargers[chargerId].tokenPrice;
         
-        if balances[msg.sender] >= damageFine {
+        if (balances[msg.sender] >= damageFine) {
             chargers[chargerId].functional = false;
             balances[msg.sender] -= damageFine;
-            owner = chargers[chargerId].owner;
+            address owner = chargers[chargerId].owner;
             transferPayment(owner, damageFine / token_price);
         } else {
-            deposit[msg.sender] -= damageFine;
-            owner = chargers[chargerId].owner;
+            studentProfiles[msg.sender].deposit -= damageFine;
+            address owner = chargers[chargerId].owner;
             transferPayment(owner, damageFine / token_price);
         }
+        
         emit ChargerReportedDamaged(chargerId, msg.sender);
     }
 
-    // Chloris's functions
-    function topUpTokens(uint256 amount) external { /* ... */ }
-    function cashOutTokens(uint256 amount) external { /* ... */ }
-    
-    constructor() {
-        owner = msg.sender;
-        deposit = 1 ether;
-        rentalFee = 0.25 ether;
-        damageFine = 0.5 ether;
-        tokenPrice = 0.01 ether; 
-    }
-
-   function topUpTokens(uint256 amount) external {
+    // Top up tokens
+    function topUpTokens(uint256 amount) external payable {
         require(msg.value == amount * tokenPrice, "Incorrect token price, cannot be topped up");
         tokens[msg.sender] += amount;
         emit TokensToppedUp(msg.sender, amount);
     }
     
+    // Cash out tokens
     function cashOutTokens(uint256 amount) external {
         require(tokens[msg.sender] >= amount, "Insufficient tokens");
         tokens[msg.sender] -= amount;
@@ -189,13 +184,15 @@ contract StudentChargerSharing is ERC20 {
         emit TokensCashedOut(msg.sender, amount);
     }
 
+    // Rent charger
     function rent() external payable {
         require(msg.value >= deposit + rentalFee, "Insufficient funds");
-        require(!rented[msg.sender], "Already rented,cannot rent again");
+        require(!rented[msg.sender], "Already rented, cannot rent again");
         balances[msg.sender] = msg.value;
         rented[msg.sender] = true;
     }
 
+    // Return charger
     function returnCharger(bool damaged) external {
         require(rented[msg.sender], "Not rented");
         uint256 balance = balances[msg.sender];
@@ -205,7 +202,7 @@ contract StudentChargerSharing is ERC20 {
         if (damaged) {
             require(refund >= damageFine, "Insufficient balance for damage fee");
             refund -= damageFine;
-            owner.transfer(damageFine);
+            payable(owner).transfer(damageFine);
         }
         tokens[msg.sender] += refund / tokenPrice;
     }
