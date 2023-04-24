@@ -51,10 +51,42 @@ contract StudentChargerSharing is ERC20 {
     }
 
     // Ziang's functions
-    function addCharger(string memory description, uint256 price) external { /* ... */ }
-    function delistCharger(uint256 chargerId) external { /* ... */ }
-    function requestBooking(uint256 chargerId) external { /* ... */ }
-    function confirmBooking(uint256 chargerId, address renter, uint256 startDate, uint256 endDate) external { /* ... */ }
+    function addCharger(string memory description, uint256 price) external {
+        chargerCounter++;
+        chargers[chargerCounter] = Charger(description, price, msg.sender, true, true);
+        emit ChargerAdded(chargerCounter, description, price, msg.sender);
+    }
+
+    function delistCharger(uint256 chargerId) external {
+        require(chargers[chargerId].owner == msg.sender, "Only the owner can delist a charger.");
+        chargers[chargerId].available = false;
+        emit ChargerDelisted(chargerId, msg.sender);
+    }
+
+    function requestBooking(uint256 chargerId) external {
+        require(chargers[chargerId].available, "Charger is not available for booking.");
+        require(chargers[chargerId].functional, "Charger is not functional.");
+        bookingCounter++;
+        bookings[bookingCounter] = Booking(chargerId, msg.sender, 0, 0, false);
+        emit BookingRequest(chargerId, msg.sender);
+    }
+
+    function confirmBooking(uint256 bookingId, uint256 startDate, uint256 endDate) external {
+        Booking storage booking = bookings[bookingId];
+        Charger storage charger = chargers[booking.chargerId];
+        require(charger.owner == msg.sender, "Only the owner can confirm a booking.");
+        require(!booking.isActive, "Booking is already confirmed.");
+        require(charger.available, "Charger is not available for booking.");
+        require(charger.functional, "Charger is not functional.");
+        require(startDate < endDate, "Invalid booking dates.");
+
+        booking.startDate = startDate;
+        booking.endDate = endDate;
+        booking.isActive = true;
+        charger.available = false;
+
+        emit BookingConfirmed(booking.chargerId, booking.renter, startDate, endDate);
+    }
 
     // Mia's function
     function transferPayment(address to, uint256 amount) external { /* ... */ }
