@@ -10,6 +10,7 @@ contract StudentChargerSharing is ERC20 {
         uint256 rating;
         uint256 totalRatings;
         uint256 deposit;
+        bool registered;
     }
 
     struct Charger {
@@ -118,7 +119,8 @@ contract StudentChargerSharing is ERC20 {
     // Register student
     function registerStudent(string memory name, string memory campusEmail) external {
         require(!registeredCampusEmails[campusEmail], "Student with this campus email already registered.");
-        studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit);
+        require(!studentProfiles[msg.sender].registered, "Account already registered a student.");
+        studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit, true);
         registeredCampusEmails[campusEmail] = true;
     }
 
@@ -175,10 +177,10 @@ contract StudentChargerSharing is ERC20 {
 
     // Top up tokens
     function topUpTokens(uint256 amount) external payable {
-        uint256 etherAmount = amount * (10 ** uint256(decimals()));
+        uint256 etherAmount = amount * tokenPrice;
         require(msg.value >= etherAmount, "Insufficient Ether sent for top-up.");
-        _mint(msg.sender, etherAmount);
-        emit TokensToppedUp(msg.sender, etherAmount);
+        _mint(msg.sender, amount);
+        emit TokensToppedUp(msg.sender, amount);
     }
     
     // Cash out tokens
