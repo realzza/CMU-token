@@ -31,6 +31,7 @@ contract StudentChargerSharing is ERC20 {
         bool isActive;
     }
 
+    mapping(string => bool) public registeredCampusEmails;
     mapping(address => StudentProfile) public studentProfiles;
     mapping(uint256 => Charger) public chargers;
     mapping(uint256 => Booking) public bookings;
@@ -116,9 +117,11 @@ contract StudentChargerSharing is ERC20 {
 
     // Register student
     function registerStudent(string memory name, string memory campusEmail) external {
-        require(bytes(studentProfiles[msg.sender].name).length == 0, "Student already registered");
+        require(!registeredCampusEmails[campusEmail], "Student with this campus email already registered.");
         studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit);
+        registeredCampusEmails[campusEmail] = true;
     }
+
 
     // Rate student
     function rateStudent(address student, uint256 rating) external { 
@@ -172,9 +175,10 @@ contract StudentChargerSharing is ERC20 {
 
     // Top up tokens
     function topUpTokens(uint256 amount) external payable {
-        require(msg.value == amount * tokenPrice, "Incorrect token price, cannot be topped up");
-        tokens[msg.sender] += amount;
-        emit TokensToppedUp(msg.sender, amount);
+        uint256 etherAmount = amount * (10 ** uint256(decimals()));
+        require(msg.value >= etherAmount, "Insufficient Ether sent for top-up.");
+        _mint(msg.sender, etherAmount);
+        emit TokensToppedUp(msg.sender, etherAmount);
     }
     
     // Cash out tokens
@@ -186,12 +190,20 @@ contract StudentChargerSharing is ERC20 {
     }
 
     // Rent charger
-    function rent() external payable {
-        require(msg.value >= deposit + rentalFee, "Insufficient funds");
-        require(!rented[msg.sender], "Already rented, cannot rent again");
-        balances[msg.sender] = msg.value;
-        rented[msg.sender] = true;
+    function rent(uint256 chargerId, uint256 bookingId) external {
+        require(chargers[chargerId].available, "Charger is not available for booking.");
+        require(chargers[chargerId].functional, "Charger is not functional.");
+        require(bookings[bookingId].isActive, "Booking is not active.");
+        require(bookings[bookingId].chargerId == chargerId, "Invalid charger for this booking.");
+        require(bookings[bookingId].renter == msg.sender, "Only the renter can rent the charger.");
+
+        uint256 paymentAmount = chargers[chargerId].price;
+        require(balanceOf(msg.sender) >= paymentAmount, "Insufficient token balance.");
+
+        transfer(chargers[chargerId].owner, paymentAmount);
+        emit PaymentTransferred(msg.sender, chargers[chargerId].owner, paymentAmount);
     }
+
 
     // Return charger
     function returnCharger(bool damaged) external {
