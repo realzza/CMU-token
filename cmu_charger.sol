@@ -9,8 +9,9 @@ contract StudentChargerSharing is ERC20 {
         string campusEmail;
         uint256 rating;
         uint256 totalRatings;
-        
         uint256 deposit;
+        bool registered;
+        uint256 tokens;
     }
 
     struct Charger {
@@ -19,10 +20,7 @@ contract StudentChargerSharing is ERC20 {
         address owner;
         bool available;
         bool functional;
-       
-        uint256 rentalFee;
         uint256 damageFine;
-        uint256 tokenPrice;
     }
 
     struct Booking {
@@ -33,15 +31,18 @@ contract StudentChargerSharing is ERC20 {
         bool isActive;
     }
 
+    mapping(string => bool) public registeredCampusEmails;
     mapping(address => StudentProfile) public studentProfiles;
     mapping(uint256 => Charger) public chargers;
     mapping(uint256 => Booking) public bookings;
+
     uint256 private chargerCounter;
     uint256 private bookingCounter;
-    
-    mapping(address => uint256) public balances;
-    mapping(address => bool) public rented;
-    mapping(address => uint) public tokens;
+
+    // Constants
+    uint256 public constant deposit = 10 ether; // Deposit in Ether
+    uint256 public constant damageFineInTokens = 50; // Damage fine of 50 tokens
+    uint256 public constant tokenPrice = 0.01 ether; // 1 token costs 0.01 ether
 
     // Events
     event ChargerAdded(uint256 indexed chargerId, string description, uint256 price, address indexed owner);
@@ -54,34 +55,43 @@ contract StudentChargerSharing is ERC20 {
     event ChargerReportedDamaged(uint256 indexed chargerId, address indexed reporter);
     event TokensToppedUp(address indexed user, uint256 amount);
     event TokensCashedOut(address indexed user, uint256 amount);
-    
-   
+
     // Constructor
     constructor() ERC20("StudentChargerToken", "SCT") {
         _mint(msg.sender, 1000000 * (10 ** uint256(decimals())));
     }
 
-    // Ziang's functions
+    // Add charger
     function addCharger(string memory description, uint256 price) external {
         chargerCounter++;
-        chargers[chargerCounter] = Charger(description, price, msg.sender, true, true);
+        chargers[chargerCounter] = Charger(description, price, msg.sender, true, true, damageFineInTokens);
         emit ChargerAdded(chargerCounter, description, price, msg.sender);
     }
 
+    // Delist charger
     function delistCharger(uint256 chargerId) external {
         require(chargers[chargerId].owner == msg.sender, "Only the owner can delist a charger.");
         chargers[chargerId].available = false;
         emit ChargerDelisted(chargerId, msg.sender);
     }
 
+    // Request booking
+    // Request booking
     function requestBooking(uint256 chargerId) external {
         require(chargers[chargerId].available, "Charger is not available for booking.");
         require(chargers[chargerId].functional, "Charger is not functional.");
+        
+        // Check if the requester has enough tokens
+        uint256 paymentAmount = chargers[chargerId].price;
+        StudentProfile storage requesterProfile = studentProfiles[msg.sender];
+        require(requesterProfile.tokens >= paymentAmount, "Insufficient token balance.");
+
         bookingCounter++;
         bookings[bookingCounter] = Booking(chargerId, msg.sender, 0, 0, false);
         emit BookingRequest(chargerId, msg.sender);
     }
 
+    // Confirm booking
     function confirmBooking(uint256 bookingId, uint256 startDate, uint256 endDate) external {
         Booking storage booking = bookings[bookingId];
         Charger storage charger = chargers[booking.chargerId];
@@ -96,117 +106,92 @@ contract StudentChargerSharing is ERC20 {
         booking.isActive = true;
         charger.available = false;
 
+        // Rent charger
+        uint256 paymentAmount = charger.price;
+        StudentProfile storage renterProfile = studentProfiles[booking.renter];
+        require(renterProfile.tokens >= paymentAmount, "Insufficient token balance.");
+
+        renterProfile.tokens -= paymentAmount;
+        studentProfiles[charger.owner].tokens += paymentAmount;
+        emit PaymentTransferred(booking.renter, charger.owner, paymentAmount);
+
         emit BookingConfirmed(booking.chargerId, booking.renter, startDate, endDate);
     }
 
-    // Mia's functions
-    function transferPayment(address to, uint256 amount) external {
-        require(tokens[msg.sender] >= amount, "Insufficient tokens for transfer");
-        tokens[msg.sender] -= amount;
-        tokens[to] += amount;
-        emit PaymentTransferred(msg.sender, to, amount);
-    }
-
-    //In the registerStudent function, we check if the student has already been registered 
-    //by verifying if the name field in their profile is empty. 
-    //If they have not been registered yet, we create a new 
-    //StudentProfile with the provided name, campus email, and an initial deposit value.
+    // Register student
+    // Updated registerStudent function
     function registerStudent(string memory name, string memory campusEmail) external {
-        require(bytes(studentProfiles[msg.sender].name).length == 0, "Student already registered");
-        studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit);
+        require(!registeredCampusEmails[campusEmail], "Student with this campus email already registered.");
+        require(!studentProfiles[msg.sender].registered, "Account already registered a student.");
+        studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit, true, 0); // Set initial token balance to 0
+        registeredCampusEmails[campusEmail] = true;
     }
 
-    // Jenny's functions
-    function rateStudent(address student, uint256 rating) external { 
-		require(bytes(studentProfiles[msg.sender].name).length != 0, "Student is not registered");
+    // Rate student
+    function rateStudent(address student, uint256 rating) external {
+        require(bytes(studentProfiles[msg.sender].name).length != 0, "Student is not registered");
 
-		num_rating = studentProfiles[student].totalRatings;
-		new_rate = (studentProfiles[student].rating * num_rating + rating) / (num_rating + 1);
-	
-		studentProfiles[student].rating = new_rate;
-		studentProfiles[student].totalRatings = num_rating + 1;
+        uint256 num_rating = studentProfiles[student].totalRatings;
+        uint256 new_rate = (studentProfiles[student].rating * num_rating + rating) / (num_rating + 1);
+
+        studentProfiles[student].rating = new_rate;
+        studentProfiles[student].totalRatings = num_rating + 1;
         emit UserRated(msg.sender, student, rating);
-	}
-    
-    
-    function reportChargerLost(uint256 chargerId) external { 
-        price = chargers[chargerId].price;
-        token_price = chargers[chargerId].tokenPrice;
+    }
+
+    // Report charger lost
+    function reportChargerLost(uint256 chargerId) external {
+        uint256 priceInTokens = chargers[chargerId].price * tokenPrice;
+        StudentProfile storage reporterProfile = studentProfiles[msg.sender];
         
-        if balances[msg.sender] >= price {
-            chargers[chargerId].functional = false;
-            balances[msg.sender] -= price;
-            owner = chargers[chargerId].owner;
-            transferPayment(owner, price / token_price);
-        } else {
-            deposit[msg.sender] -= price;
-            owner = chargers[chargerId].owner;
-            transferPayment(owner, price / token_price);
-        }    
+        require(reporterProfile.tokens >= priceInTokens, "Insufficient tokens for lost charger payment.");
+        chargers[chargerId].functional = false;
+        reporterProfile.tokens -= priceInTokens;
+        studentProfiles[chargers[chargerId].owner].tokens += priceInTokens;
+        emit PaymentTransferred(msg.sender, chargers[chargerId].owner, priceInTokens);
+        
         emit ChargerReportedLost(chargerId, msg.sender);
     }
+
+    // Report charger damaged
+    function reportChargerDamaged(uint256 chargerId) external {
+        StudentProfile storage reporterProfile = studentProfiles[msg.sender];
         
+        require(reporterProfile.tokens >= damageFineInTokens, "Insufficient tokens for damage fine payment.");
+        chargers[chargerId].functional = false;
+        reporterProfile.tokens -= damageFineInTokens;
+        studentProfiles[chargers[chargerId].owner].tokens += damageFineInTokens;
+        emit PaymentTransferred(msg.sender, chargers[chargerId].owner, damageFineInTokens);
         
-    function reportChargerDamaged(uint256 chargerId) external { 
-        damageFine = chargers[chargerId].damageFine;
-        token_price = chargers[chargerId].tokenPrice;
-        
-        if balances[msg.sender] >= damageFine {
-            chargers[chargerId].functional = false;
-            balances[msg.sender] -= damageFine;
-            owner = chargers[chargerId].owner;
-            transferPayment(owner, damageFine / token_price);
-        } else {
-            deposit[msg.sender] -= damageFine;
-            owner = chargers[chargerId].owner;
-            transferPayment(owner, damageFine / token_price);
-        }
         emit ChargerReportedDamaged(chargerId, msg.sender);
     }
 
-    // Chloris's functions
-    function topUpTokens(uint256 amount) external { /* ... */ }
-    function cashOutTokens(uint256 amount) external { /* ... */ }
-    
-    constructor() {
-        owner = msg.sender;
-        deposit = 1 ether;
-        rentalFee = 0.25 ether;
-        damageFine = 0.5 ether;
-        tokenPrice = 0.01 ether; 
+    // Updated topUpTokens function
+    function topUpTokens(uint256 tokenAmount) external payable {
+        uint256 etherAmount = tokenAmount * tokenPrice;
+        // require(msg.value == etherAmount, "Incorrect Ether amount sent.");
+        require(studentProfiles[msg.sender].deposit >= etherAmount, "Insufficient deposit balance for top-up.");
+        studentProfiles[msg.sender].tokens += tokenAmount;
+        studentProfiles[msg.sender].deposit -= etherAmount;
+        emit TokensToppedUp(msg.sender, tokenAmount);
     }
 
-   function topUpTokens(uint256 amount) external {
-        require(msg.value == amount * tokenPrice, "Incorrect token price, cannot be topped up");
-        tokens[msg.sender] += amount;
-        emit TokensToppedUp(msg.sender, amount);
+
+    // New function to check remaining tokens
+    function remainingTokens(address student) external view returns (uint256) {
+        return studentProfiles[student].tokens;
     }
     
+    // New function to check remaining ethers in the deposit (demonstration purpose only)
+    function remainingEthers(address student) external view returns (uint256) {
+        return studentProfiles[student].deposit / 1e18;
+    }
+
+    // Cash out tokens
     function cashOutTokens(uint256 amount) external {
-        require(tokens[msg.sender] >= amount, "Insufficient tokens");
-        tokens[msg.sender] -= amount;
+        require(balanceOf(msg.sender) >= amount, "Insufficient tokens");
+        _burn(msg.sender, amount);
         payable(msg.sender).transfer(amount * tokenPrice);
         emit TokensCashedOut(msg.sender, amount);
-    }
-
-    function rent() external payable {
-        require(msg.value >= deposit + rentalFee, "Insufficient funds");
-        require(!rented[msg.sender], "Already rented,cannot rent again");
-        balances[msg.sender] = msg.value;
-        rented[msg.sender] = true;
-    }
-
-    function returnCharger(bool damaged) external {
-        require(rented[msg.sender], "Not rented");
-        uint256 balance = balances[msg.sender];
-        balances[msg.sender] = 0;
-        rented[msg.sender] = false;
-        uint256 refund = balance - rentalFee;
-        if (damaged) {
-            require(refund >= damageFine, "Insufficient balance for damage fee");
-            refund -= damageFine;
-            owner.transfer(damageFine);
-        }
-        tokens[msg.sender] += refund / tokenPrice;
     }
 }
