@@ -20,7 +20,6 @@ contract StudentChargerSharing is ERC20 {
         address owner;
         bool available;
         bool functional;
-        uint256 rentalFee;
         uint256 damageFine;
     }
 
@@ -42,7 +41,6 @@ contract StudentChargerSharing is ERC20 {
 
     // Constants
     uint256 public constant deposit = 10 ether; // Deposit in Ether
-    uint256 public constant rentalFeeInTokens = 25; // Rental fee of 25 tokens
     uint256 public constant damageFineInTokens = 50; // Damage fine of 50 tokens
     uint256 public constant tokenPrice = 0.01 ether; // 1 token costs 0.01 ether
 
@@ -66,7 +64,7 @@ contract StudentChargerSharing is ERC20 {
     // Add charger
     function addCharger(string memory description, uint256 price) external {
         chargerCounter++;
-        chargers[chargerCounter] = Charger(description, price, msg.sender, true, true, rentalFeeInTokens, damageFineInTokens);
+        chargers[chargerCounter] = Charger(description, price, msg.sender, true, true, damageFineInTokens);
         emit ChargerAdded(chargerCounter, description, price, msg.sender);
     }
 
@@ -84,7 +82,7 @@ contract StudentChargerSharing is ERC20 {
         require(chargers[chargerId].functional, "Charger is not functional.");
         
         // Check if the requester has enough tokens
-        uint256 paymentAmount = chargers[chargerId].rentalFee;
+        uint256 paymentAmount = chargers[chargerId].price;
         StudentProfile storage requesterProfile = studentProfiles[msg.sender];
         require(requesterProfile.tokens >= paymentAmount, "Insufficient token balance.");
 
@@ -109,7 +107,7 @@ contract StudentChargerSharing is ERC20 {
         charger.available = false;
 
         // Rent charger
-        uint256 paymentAmount = charger.rentalFee;
+        uint256 paymentAmount = charger.price;
         StudentProfile storage renterProfile = studentProfiles[booking.renter];
         require(renterProfile.tokens >= paymentAmount, "Insufficient token balance.");
 
@@ -185,7 +183,7 @@ contract StudentChargerSharing is ERC20 {
         return studentProfiles[student].tokens;
     }
     
-    // New function to check remaining ethers in the deposit
+    // New function to check remaining ethers in the deposit (demonstration purpose only)
     function remainingEthers(address student) external view returns (uint256) {
         return studentProfiles[student].deposit / 1e18;
     }
