@@ -141,7 +141,7 @@ contract StudentChargerSharing is ERC20 {
 
     // Report charger lost
     function reportChargerLost(uint256 chargerId) external {
-        uint256 priceInTokens = chargers[chargerId].price / tokenPrice;
+        uint256 priceInTokens = chargers[chargerId].price * tokenPrice;
         StudentProfile storage reporterProfile = studentProfiles[msg.sender];
         
         require(reporterProfile.tokens >= priceInTokens, "Insufficient tokens for lost charger payment.");
@@ -155,7 +155,6 @@ contract StudentChargerSharing is ERC20 {
 
     // Report charger damaged
     function reportChargerDamaged(uint256 chargerId) external {
-        uint256 damageFineInTokens = chargers[chargerId].damageFine / tokenPrice;
         StudentProfile storage reporterProfile = studentProfiles[msg.sender];
         
         require(reporterProfile.tokens >= damageFineInTokens, "Insufficient tokens for damage fine payment.");
