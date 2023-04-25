@@ -44,7 +44,8 @@ contract StudentChargerSharing is ERC20 {
     // Constants
     uint256 public constant deposit = 1 ether;
     uint256 public constant rentalFee = 0.25 ether;
-    uint256 public constant damageFine = 0.5 ether;
+    // uint256 public constant damageFine = 0.5 ether;
+    uint256 public damageFine;
     uint256 public constant tokenPrice = 0.01 ether; 
 
     // Events
@@ -106,7 +107,7 @@ contract StudentChargerSharing is ERC20 {
     }
 
     // Transfer payment
-    function transferPayment(address to, uint256 amount) external {
+    function transferPayment(address to, uint256 amount) public {
         require(tokens[msg.sender] >= amount, "Insufficient tokens for transfer");
         tokens[msg.sender] -= amount;
         tokens[to] += amount;
@@ -202,7 +203,7 @@ contract StudentChargerSharing is ERC20 {
         if (damaged) {
             require(refund >= damageFine, "Insufficient balance for damage fee");
             refund -= damageFine;
-            payable(owner).transfer(damageFine);
+            payable(msg.sender).transfer(damageFine);
         }
         tokens[msg.sender] += refund / tokenPrice;
     }
