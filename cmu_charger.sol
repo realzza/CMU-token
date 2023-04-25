@@ -78,9 +78,16 @@ contract StudentChargerSharing is ERC20 {
     }
 
     // Request booking
+    // Request booking
     function requestBooking(uint256 chargerId) external {
         require(chargers[chargerId].available, "Charger is not available for booking.");
         require(chargers[chargerId].functional, "Charger is not functional.");
+        
+        // Check if the requester has enough tokens
+        uint256 paymentAmount = chargers[chargerId].rentalFee;
+        StudentProfile storage requesterProfile = studentProfiles[msg.sender];
+        require(requesterProfile.tokens >= paymentAmount, "Insufficient token balance.");
+
         bookingCounter++;
         bookings[bookingCounter] = Booking(chargerId, msg.sender, 0, 0, false);
         emit BookingRequest(chargerId, msg.sender);
@@ -114,10 +121,11 @@ contract StudentChargerSharing is ERC20 {
     }
 
     // Register student
+    // Updated registerStudent function
     function registerStudent(string memory name, string memory campusEmail) external {
         require(!registeredCampusEmails[campusEmail], "Student with this campus email already registered.");
         require(!studentProfiles[msg.sender].registered, "Account already registered a student.");
-        studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit, true, deposit / tokenPrice); // Set initial token balance (deposit in tokens)
+        studentProfiles[msg.sender] = StudentProfile(name, campusEmail, 0, 0, deposit, true, 0); // Set initial token balance to 0
         registeredCampusEmails[campusEmail] = true;
     }
 
@@ -161,14 +169,27 @@ contract StudentChargerSharing is ERC20 {
         emit ChargerReportedDamaged(chargerId, msg.sender);
     }
 
-    // Top up tokens
-    function topUpTokens(uint256 amount) external payable {
-        uint256 etherAmount = amount * tokenPrice;
-        require(msg.value >= etherAmount, "Insufficient Ether sent for top-up.");
-        _mint(msg.sender, amount);
-        emit TokensToppedUp(msg.sender, amount);
+    // Updated topUpTokens function
+    function topUpTokens(uint256 tokenAmount) external payable {
+        uint256 etherAmount = tokenAmount * tokenPrice;
+        // require(msg.value == etherAmount, "Incorrect Ether amount sent.");
+        require(studentProfiles[msg.sender].deposit >= etherAmount, "Insufficient deposit balance for top-up.");
+        studentProfiles[msg.sender].tokens += tokenAmount;
+        studentProfiles[msg.sender].deposit -= etherAmount;
+        emit TokensToppedUp(msg.sender, tokenAmount);
+    }
+
+
+    // New function to check remaining tokens
+    function remainingTokens(address student) external view returns (uint256) {
+        return studentProfiles[student].tokens;
     }
     
+    // New function to check remaining ethers in the deposit
+    function remainingEthers(address student) external view returns (uint256) {
+        return studentProfiles[student].deposit / 1e18;
+    }
+
     // Cash out tokens
     function cashOutTokens(uint256 amount) external {
         require(balanceOf(msg.sender) >= amount, "Insufficient tokens");
